@@ -1,8 +1,40 @@
 ---
-# the default layout is 'page'
-icon: fas fa-info-circle
+icon: fas fa-user
 order: 4
+
 ---
 
-> Add Markdown syntax content to file `_tabs/about.md`{: .filepath } and it will show up on this page.
-{: .prompt-tip }
+## 关于我
+
+你好，我是 **scdyh** 👋
+
+目前主要在做：
+
+- 渗透测试
+- 靶机学习
+- CTF（我想成为一个web拿5分，其他都能拿3分的脚本小子）
+- 漏洞分析与复现
+
+---
+
+## 博客内容
+
+这个博客主要记录：
+
+- 靶机复盘（HTB / Mazesec 等）
+- CTF 题解（Pwn / Web）
+- 漏洞复现
+- 好吧，其实我还没想好
+
+---
+
+## 联系方式
+
+- GitHub: https://github.com/scdyh
+- 不漏信息了，再漏信息就裸奔上网了 QAQ
+
+---
+
+## 说明
+
+本博客内容仅用于学习与研究，请勿用于非法用途。
