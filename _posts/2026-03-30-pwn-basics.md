@@ -6,7 +6,6 @@ categories:
   - pwn刷题
 tags:
   - ctfshow
-  - 前置基础
 ---
 ## 前置基础
 
