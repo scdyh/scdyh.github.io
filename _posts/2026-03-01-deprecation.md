@@ -5,7 +5,7 @@ categories:
   - 渗透练习
   - mazesec
 tags:
-  - Deprecation
+  - Redis小垃圾堆方案
 ---
 ## Deprecation
 
