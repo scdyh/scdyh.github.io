@@ -5,7 +5,7 @@ categories:
   - 渗透练习
   - mazesec
 tags:
-  - love_lovers
+  - CVE-2025-62878
 ---
 ## love_lovers
 
