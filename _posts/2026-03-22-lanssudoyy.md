@@ -5,7 +5,8 @@ categories:
   - 渗透练习
   - mazesec
 tags:
-  - lanSSudoyy
+  - 逻辑漏洞
+  - CVE-2021-3156
 ---
 ## lanSSudoyy
 
