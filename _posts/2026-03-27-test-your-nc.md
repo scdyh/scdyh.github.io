@@ -6,7 +6,6 @@ categories:
   - pwn刷题
 tags:
   - ctfshow
-  - Test_your_nc
 ---
 ## Test_your_nc
 
