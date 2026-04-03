@@ -1,6 +1,7 @@
 ---
 title: '前置基础'
 date: 2026-03-30 17:04:30 +0800
+description: "pwn萌新已经学的有点晕了"
 categories:
   - ctf刷题
   - pwn刷题
