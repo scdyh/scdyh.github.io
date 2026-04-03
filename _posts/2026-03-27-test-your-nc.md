@@ -1,6 +1,7 @@
 ---
 title: 'Test_your_nc'
 date: 2026-03-27 14:52:40 +0800
+description: "我认为，我从不缺从头再来的勇气"
 categories:
   - ctf刷题
   - pwn刷题
@@ -9,7 +10,6 @@ tags:
 ---
 ## Test_your_nc
 
-我认为，我从不缺从头再来的勇气
 
 
 
