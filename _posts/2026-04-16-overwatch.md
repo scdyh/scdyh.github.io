@@ -1,12 +1,13 @@
 ---
 title: "Overwatch"
 date: 2026-04-16 17:54:01 +0800
+description: "ai从开始任务到编写exp竟然只用了不到8分钟"
 categories:
   - 渗透练习
   - hackthebox
 tags:
-  - hackthebox
-  - overwatch
+  - DNS劫持
+  - RE
 toc: true
 ---
 
